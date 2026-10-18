@@ -1,0 +1,1 @@
+export default function MetricCard({label,value,sub}:{label:string;value:any;sub?:string}){return <div className="panel p-4"><div className="text-xs uppercase tracking-widest text-slate-500">{label}</div><div className="text-3xl font-black mt-2">{value}</div>{sub&&<div className="text-xs text-slate-400 mt-1">{sub}</div>}</div>}

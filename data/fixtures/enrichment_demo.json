@@ -1,0 +1,10 @@
+{
+  "203.0.113.45": {
+    "reputation": 87,
+    "confidence": 87,
+    "report_count": 19,
+    "country": "DE",
+    "provider": "demo-mock",
+    "simulated": true
+  }
+}

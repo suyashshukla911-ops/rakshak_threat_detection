@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { font-family: Inter, system-ui, sans-serif; background:#0B1120; color:#E5E7EB; font-synthesis:none; }
+body { margin:0; min-width:320px; background:#0B1120; }
+* { box-sizing:border-box; }
+.mono { font-family:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+.panel { background:#111827; border:1px solid #263244; border-radius:16px; box-shadow:0 8px 30px rgba(0,0,0,.18); }
+.badge { display:inline-flex; align-items:center; gap:.35rem; padding:.2rem .5rem; border-radius:999px; font-size:.72rem; font-weight:700; }

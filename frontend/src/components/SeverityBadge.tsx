@@ -1,0 +1,1 @@
+export default function SeverityBadge({value}:{value:string}){ const map:any={critical:['#EF4444','Critical'],high:['#F59E0B','High'],medium:['#F59E0B','Medium'],low:['#94A3B8','Low'],info:['#38BDF8','Info']}; const [c,t]=map[value]||map.info; return <span className="badge" style={{background:`${c}22`,color:c,border:`1px solid ${c}55`}}>{t}</span> }
