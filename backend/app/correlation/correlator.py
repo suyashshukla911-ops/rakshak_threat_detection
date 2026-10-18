@@ -149,7 +149,7 @@ def merge_overlapping_candidates(candidates: list[dict]) -> list[dict]:
     return merged_list
 
 
-def build_incidents(alerts: list, events_by_id: dict[str, dict]) -> list[dict]:
+def build_incidents(alerts: list, events_by_id: dict[str, dict], id_prefix: str = "INC-") -> list[dict]:
     brute = [a for a in alerts if a.rule_id == "SSH_BRUTE_FORCE"]
     candidates = []
     for seed in brute:
@@ -194,7 +194,7 @@ def build_incidents(alerts: list, events_by_id: dict[str, dict]) -> list[dict]:
                     seen_mitre.add(m["id"])
 
         incidents.append({
-            "id": f"INC-{idx:03d}",
+            "id": f"{id_prefix}{idx:03d}",
             "severity": sev,
             "score": score,
             "status": "open",

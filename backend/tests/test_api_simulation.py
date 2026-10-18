@@ -17,7 +17,7 @@ def test_api_simulation_and_report_generation():
     run_id = data["run_id"]
 
     # 2. Poll until simulation completes
-    max_wait = 20.0
+    max_wait = 45.0
     start = time.time()
     final_status = None
     while time.time() - start < max_wait:

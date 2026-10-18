@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.openai.com/v1"
     llm_model: str | None = None
     llm_timeout_seconds: float = 20.0
+    demo_mode: bool = True
 
     model_config = SettingsConfigDict(env_file=ROOT / ".env", extra="ignore", case_sensitive=False)
 

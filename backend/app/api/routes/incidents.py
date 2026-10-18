@@ -4,6 +4,7 @@ from app.api.routes.common import get_db, check_rate_limit
 from app.services.incident_service import IncidentService
 from app.models.orm import IncidentORM
 from app.ai.explainer import ai_explainer
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -33,6 +34,8 @@ async def report(
         raise HTTPException(404, "Incident not found")
     if format != "json":
         raise HTTPException(400, "Only JSON export is implemented in P1")
+    if inject_bad and not settings.demo_mode:
+        raise HTTPException(403, "Bad AI injection toggle is disabled outside demo mode")
 
     # Re-run explain and validate
     status, content, metadata = await ai_explainer.generate(item, simulate_bad_ai=inject_bad)

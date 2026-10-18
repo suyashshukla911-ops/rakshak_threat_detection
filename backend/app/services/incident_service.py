@@ -29,18 +29,16 @@ class IncidentService:
         self.explainer = ai_explainer
 
     def clear_demo(self, clear_uploads: bool = False):
-        """Resets the demo data while preserving any user-uploaded logs."""
+        """Resets the demo data while preserving any user-uploaded logs, alerts, and incidents."""
         global _ANOMALY_COUNT_CACHE
         _ANOMALY_COUNT_CACHE = 0
         if clear_uploads:
-
             self.db.query(IncidentORM).delete()
             self.db.query(AlertORM).delete()
             self.db.query(EventORM).delete()
         else:
-            # Delete only demo events (non-upload) and associated alerts/incidents
-            self.db.query(IncidentORM).delete()
-            self.db.query(AlertORM).delete()
+            self.db.query(IncidentORM).filter(IncidentORM.batch_id.notlike("upload-%")).delete()
+            self.db.query(AlertORM).filter(AlertORM.batch_id.notlike("upload-%")).delete()
             self.db.query(EventORM).filter(EventORM.batch_id.notlike("upload-%")).delete()
         self.db.commit()
 
@@ -73,9 +71,33 @@ class IncidentService:
         self.db.commit()
         return accepted, rejected
 
+    async def run_detection(self, progress_callback=None, is_simulation: bool = False, batch_id: str | None = None, simulate_bad_ai: bool = False) -> tuple[list[AlertORM], list[IncidentORM], int]:
+        if is_simulation or batch_id == "demo":
+            effective_batch_id = "demo"
+            id_prefix = "INC-"
+            alert_prefix = "alert-"
+            events_stmt = select(EventORM).where(EventORM.batch_id.notlike("upload-%")).order_by(EventORM.timestamp)
+            self.db.query(IncidentORM).filter(IncidentORM.batch_id.notlike("upload-%")).delete()
+            self.db.query(AlertORM).filter(AlertORM.batch_id.notlike("upload-%")).delete()
+            self.db.commit()
+        elif batch_id and batch_id.startswith("upload-"):
+            effective_batch_id = batch_id
+            id_prefix = "INC-UP-"
+            alert_prefix = f"alert-{batch_id[:12]}-"
+            events_stmt = select(EventORM).where(EventORM.batch_id == batch_id).order_by(EventORM.timestamp)
+            self.db.query(IncidentORM).filter(IncidentORM.batch_id == batch_id).delete()
+            self.db.query(AlertORM).filter(AlertORM.batch_id == batch_id).delete()
+            self.db.commit()
+        else:
+            effective_batch_id = "demo"
+            id_prefix = "INC-"
+            alert_prefix = "alert-"
+            events_stmt = select(EventORM).order_by(EventORM.timestamp)
+            self.db.query(IncidentORM).delete()
+            self.db.query(AlertORM).delete()
+            self.db.commit()
 
-    async def run_detection(self, progress_callback=None, is_simulation: bool = False, simulate_bad_ai: bool = False) -> tuple[list[AlertORM], list[IncidentORM], int]:
-        events_orm = list(self.db.scalars(select(EventORM).order_by(EventORM.timestamp)).all())
+        events_orm = list(self.db.scalars(events_stmt).all())
         events_count = len(events_orm)
         
         def notify(stage: str, details: str = ""):
@@ -95,10 +117,6 @@ class IncidentService:
         
         detection = detect_alerts(events)
         detect_time = round(time.time() - t0, 3)
-
-        self.db.query(IncidentORM).delete()
-        self.db.query(AlertORM).delete()
-        self.db.commit()
 
         event_by_id = {e["id"]: e for e in events}
         anomaly_map = {}
@@ -128,7 +146,7 @@ class IncidentService:
                             except Exception:
                                 continue
 
-            orm_id = f"alert-{idx:03d}"
+            orm_id = f"{alert_prefix}{idx:03d}"
             orm = AlertORM(
                 id=orm_id,
                 rule_id=a.rule_id,
@@ -141,7 +159,8 @@ class IncidentService:
                 mitre_ids=a.mitre_ids,
                 explanation=a.explanation,
                 anomaly_score=score,
-                link_reason=a.link_reason
+                link_reason=a.link_reason,
+                batch_id=effective_batch_id,
             )
             self.db.add(orm)
             alerts_orm.append(orm)
@@ -151,13 +170,12 @@ class IncidentService:
 
         t_corr = time.time()
         notify("Correlating", f"{len(detection)} alerts ({detect_time}s)")
-        incidents = build_incidents(detection, event_by_id)
+        incidents = build_incidents(detection, event_by_id, id_prefix=id_prefix)
 
         notify("Building timeline", f"{len(incidents)} candidate incidents")
         incident_orms = []
         for inc in incidents:
             rel_alerts = inc.get("_alerts", [])
-            # Map all attached alerts to real AlertORM IDs
             inc_alert_ids = [
                 alert_key_to_orm_id.get((a.rule_id, tuple(a.event_ids)))
                 for a in rel_alerts
@@ -168,6 +186,7 @@ class IncidentService:
             incident_orm = IncidentORM(**{k: v for k, v in inc.items() if not k.startswith('_')})
             incident_orm.enrichment = {}
             incident_orm.ai_summary = {}
+            incident_orm.batch_id = effective_batch_id
             self.db.add(incident_orm)
             incident_orms.append(incident_orm)
 
@@ -176,8 +195,7 @@ class IncidentService:
         notify("Mapping MITRE", "Validating techniques")
         notify("Enriching", "Threat intelligence lookup")
 
-        # Use DemoMockProvider for simulation; AbuseIPDBProvider for uploaded logs
-        if is_simulation:
+        if is_simulation or effective_batch_id == "demo":
             provider = DemoMockProvider(str(FIXTURE))
         else:
             provider = AbuseIPDBProvider()
@@ -199,8 +217,8 @@ class IncidentService:
         _ANOMALY_COUNT_CACHE = anomaly_count
         return alerts_orm, incident_orms, anomaly_count
 
-    def run_detection_sync(self, progress_callback=None, is_simulation: bool = False, simulate_bad_ai: bool = False) -> tuple[list[AlertORM], list[IncidentORM], int]:
-        return asyncio.run(self.run_detection(progress_callback=progress_callback, is_simulation=is_simulation, simulate_bad_ai=simulate_bad_ai))
+    def run_detection_sync(self, progress_callback=None, is_simulation: bool = False, batch_id: str | None = None, simulate_bad_ai: bool = False) -> tuple[list[AlertORM], list[IncidentORM], int]:
+        return asyncio.run(self.run_detection(progress_callback=progress_callback, is_simulation=is_simulation, batch_id=batch_id, simulate_bad_ai=simulate_bad_ai))
 
     @staticmethod
     def orm_event_to_dict(e: EventORM) -> dict:
@@ -208,11 +226,11 @@ class IncidentService:
 
     @staticmethod
     def alert_to_dict(a: AlertORM) -> dict:
-        return {"id": a.id, "rule_id": a.rule_id, "title": a.title, "severity": a.severity, "confidence": a.confidence, "event_ids": a.event_ids, "first_seen": a.first_seen, "last_seen": a.last_seen, "mitre_ids": a.mitre_ids, "explanation": a.explanation, "anomaly_score": a.anomaly_score, "link_reason": a.link_reason}
+        return {"id": a.id, "rule_id": a.rule_id, "title": a.title, "severity": a.severity, "confidence": a.confidence, "event_ids": a.event_ids, "first_seen": a.first_seen, "last_seen": a.last_seen, "mitre_ids": a.mitre_ids, "explanation": a.explanation, "anomaly_score": a.anomaly_score, "link_reason": a.link_reason, "batch_id": a.batch_id}
 
     @staticmethod
     def incident_to_dict(i: IncidentORM) -> dict:
-        return {"id": i.id, "severity": i.severity, "score": i.score, "status": i.status, "source_ip": i.source_ip, "affected_hosts": i.affected_hosts, "users": i.users, "alert_ids": i.alert_ids, "stages": i.stages, "timeline": i.timeline, "mitre_techniques": i.mitre_techniques, "enrichment": i.enrichment, "ai_summary": i.ai_summary}
+        return {"id": i.id, "severity": i.severity, "score": i.score, "status": i.status, "source_ip": i.source_ip, "affected_hosts": i.affected_hosts, "users": i.users, "alert_ids": i.alert_ids, "stages": i.stages, "timeline": i.timeline, "mitre_techniques": i.mitre_techniques, "enrichment": i.enrichment, "ai_summary": i.ai_summary, "batch_id": i.batch_id}
 
     def get_incident(self, incident_id: str) -> dict | None:
         obj = self.db.get(IncidentORM, incident_id)

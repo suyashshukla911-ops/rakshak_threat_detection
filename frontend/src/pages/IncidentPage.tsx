@@ -127,11 +127,11 @@ export default function IncidentPage() {
             <button
               onClick={() => genReport(true)}
               disabled={generating}
-              title="Demo toggle: Injects hallucinated event IDs and verifies validator rejection"
+              title="Demo mode: Tests the validator with a canned bad answer (no LLM call) to prove live hallucination interception"
               className="px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-300 hover:bg-amber-500/20 font-semibold flex items-center gap-2 disabled:opacity-50 transition"
             >
               <Bug size={15} />
-              Inject Bad AI (Demo)
+              Test Validator (Canned Bad Answer)
             </button>
 
             <button
@@ -343,9 +343,8 @@ export default function IncidentPage() {
                   <AlertTriangle size={14} />
                   Validator Intercepted Hallucination
                 </div>
-                <div>{aiMetadata.rejected_reason}</div>
-                <div className="text-[11px] text-amber-300/70">
-                  Safely degraded to verified deterministic template report.
+                <div className="text-[11px] text-amber-300/80">
+                  Canned bad answer evaluated against live validator (no LLM call) — safely degraded to verified deterministic template report.
                 </div>
               </div>
             )}

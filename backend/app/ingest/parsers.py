@@ -4,11 +4,11 @@ import json
 from pathlib import Path
 
 
-def parse_content(filename: str, content: bytes, max_lines: int) -> tuple[list[dict], list[str]]:
+def parse_content(filename: str, content: bytes, max_lines: int, source_file_override: str | None = None) -> tuple[list[dict], list[str]]:
     name = Path(filename).suffix.lower()
     errors: list[str] = []
     records: list[dict] = []
-    base_name = Path(filename).name
+    base_name = source_file_override if source_file_override is not None else Path(filename).name
     if name == ".jsonl":
         for idx, line in enumerate(content.decode("utf-8", errors="replace").splitlines(), start=1):
             if not line.strip():

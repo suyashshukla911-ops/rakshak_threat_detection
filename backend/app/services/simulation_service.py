@@ -52,17 +52,17 @@ class SimulationManager:
                 self.runs[run_id]["updated_at"] = time.time()
 
             alerts_orm, incident_orms, anomaly_count = asyncio.run(
-                service.run_detection(progress_callback=progress, is_simulation=True)
+                service.run_detection(progress_callback=progress, is_simulation=True, batch_id="demo")
             )
 
-            incidents = service.get_incidents()
+            demo_incidents = [i for i in service.get_incidents() if not i.get("batch_id", "").startswith("upload-")]
             total_dur = round(time.time() - t_start, 2)
             self.runs[run_id]["done"] = True
-            self.runs[run_id]["stage"] = "CRITICAL INCIDENT DETECTED" if incidents else "Complete"
-            self.runs[run_id]["detail"] = f"Reconstructed {len(incidents)} incident and {len(alerts_orm)} alerts in {total_dur}s"
-            self.runs[run_id]["incident_id"] = incidents[0]["id"] if incidents else None
+            self.runs[run_id]["stage"] = "CRITICAL INCIDENT DETECTED" if demo_incidents else "Complete"
+            self.runs[run_id]["detail"] = f"Reconstructed {len(demo_incidents)} incident and {len(alerts_orm)} alerts in {total_dur}s"
+            self.runs[run_id]["incident_id"] = demo_incidents[0]["id"] if demo_incidents else None
             self.runs[run_id]["alerts_count"] = len(alerts_orm)
-            self.runs[run_id]["incidents_count"] = len(incidents)
+            self.runs[run_id]["incidents_count"] = len(demo_incidents)
             self.runs[run_id]["anomaly_count"] = anomaly_count
         except Exception as exc:
             self.runs[run_id]["error"] = str(exc)
