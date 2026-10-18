@@ -44,14 +44,43 @@ def sample_incident():
     }
 
 
+from app.core.config import settings
+
 def test_ai_unavailable_returns_deterministic_report():
     explainer = AIExplainer()
-    # No API key configured
-    status, report, meta = asyncio.run(explainer.generate(sample_incident()))
-    assert status == "unavailable"
-    assert "executive_summary" in report
-    assert "evidence_refs" in report
-    assert meta["model"] == "deterministic-template"
+    # Explicitly isolate no API key configured
+    old_key = settings.llm_api_key
+    try:
+        settings.llm_api_key = None
+        status, report, meta = asyncio.run(explainer.generate(sample_incident()))
+        assert status == "unavailable"
+        assert "executive_summary" in report
+        assert "evidence_refs" in report
+        assert meta["model"] == "deterministic-template"
+    finally:
+        settings.llm_api_key = old_key
+
+
+def test_ai_network_failure_falls_back_deterministically():
+    explainer = AIExplainer()
+    old_key = settings.llm_api_key
+    old_model = settings.llm_model
+    old_url = settings.llm_base_url
+    old_timeout = settings.llm_timeout_seconds
+    try:
+        settings.llm_api_key = "dummy-offline-key"
+        settings.llm_model = "gpt-4o"
+        settings.llm_base_url = "http://127.0.0.1:9"
+        settings.llm_timeout_seconds = 0.5
+        status, report, meta = asyncio.run(explainer.generate(sample_incident()))
+        assert status == "fallback"
+        assert "executive_summary" in report
+        assert "evidence_refs" in report
+    finally:
+        settings.llm_api_key = old_key
+        settings.llm_model = old_model
+        settings.llm_base_url = old_url
+        settings.llm_timeout_seconds = old_timeout
 
 
 def test_ai_fabricated_id_falls_back():
