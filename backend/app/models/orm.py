@@ -40,6 +40,7 @@ class AlertORM(Base):
     explanation: Mapped[dict] = mapped_column(JSON, default=dict)
     anomaly_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     link_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    batch_id: Mapped[str] = mapped_column(String, default="demo", index=True)
 
 class IncidentORM(Base):
     __tablename__ = "incidents"
@@ -56,3 +57,4 @@ class IncidentORM(Base):
     mitre_techniques: Mapped[list] = mapped_column(JSON, default=list)
     enrichment: Mapped[dict] = mapped_column(JSON, default=dict)
     ai_summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    batch_id: Mapped[str] = mapped_column(String, default="demo", index=True)
