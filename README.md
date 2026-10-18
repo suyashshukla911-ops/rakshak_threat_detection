@@ -80,7 +80,8 @@ Open `http://localhost:5173`.
 python -m pytest backend/tests -v
 ```
 
-All 26 test cases cover:
+All 32 test cases cover:
+- Multi-upload & dedupe (`test_upload_dedupe_collision.py`): multi-upload collision prevention with distinct incident/alert IDs, appended-file single-event acceptance, duplicate survival (all 13,904 seed events stored), rename dedupe, and `DEMO_MODE` gate.
 - Boundary tests (`test_boundary.py`): 4 vs 5 failures, 119 vs 121s, 49 vs 51 MB.
 - Decoy immunity (`test_decoys.py`): 4 standard decoys + near-miss decoys produce zero incidents.
 - Advanced correlation (`test_correlation_advanced.py`): user+host pivot attachment, chronological timeline ordering, deduplication.
