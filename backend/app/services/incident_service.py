@@ -3,10 +3,10 @@ from datetime import datetime, timezone
 import pathlib
 import time
 from uuid import uuid4
-from collections import Counter
+from collections import Counter, defaultdict
 from sqlalchemy import select, func
 from app.models.orm import EventORM, AlertORM, IncidentORM
-from app.ingest.normalizer import normalize_event
+from app.ingest.normalizer import normalize_event, get_semantic_key
 from app.ingest.validation import validate_event
 from app.ingest.parsers import parse_content
 from app.detection.rules import detect_alerts
@@ -47,6 +47,7 @@ class IncidentService:
         rejected = []
         existing_hashes = set(self.db.scalars(select(EventORM.raw_hash)).all())
         batch_to_add = []
+        semantic_counts: dict[str, int] = defaultdict(int)
         for idx, raw in enumerate(records, start=1):
             event, error = validate_event(raw)
             if error:
@@ -54,7 +55,10 @@ class IncidentService:
                 continue
             sf = raw.get("source_file", source_file)
             lo = raw.get("line_offset", idx)
-            payload = normalize_event(event, batch_id, source_file=sf, line_offset=lo)
+            sem_key = get_semantic_key(event)
+            semantic_counts[sem_key] += 1
+            occ = semantic_counts[sem_key]
+            payload = normalize_event(event, batch_id, source_file=sf, line_offset=lo, occurrence=occ)
             raw_hash = payload["raw_hash"]
             if raw_hash in existing_hashes:
                 continue
@@ -82,8 +86,9 @@ class IncidentService:
             self.db.commit()
         elif batch_id and batch_id.startswith("upload-"):
             effective_batch_id = batch_id
-            id_prefix = "INC-UP-"
-            alert_prefix = f"alert-{batch_id[:12]}-"
+            token = batch_id.replace("upload-", "")[:8]
+            id_prefix = f"INC-UP-{token}-"
+            alert_prefix = f"alert-up-{token}-"
             events_stmt = select(EventORM).where(EventORM.batch_id == batch_id).order_by(EventORM.timestamp)
             self.db.query(IncidentORM).filter(IncidentORM.batch_id == batch_id).delete()
             self.db.query(AlertORM).filter(AlertORM.batch_id == batch_id).delete()

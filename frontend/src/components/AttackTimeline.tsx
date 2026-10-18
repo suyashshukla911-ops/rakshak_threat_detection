@@ -61,7 +61,7 @@ export default function AttackTimeline({ timeline }: { timeline: TimelineItem[] 
                   {new Date(x.ts).toLocaleTimeString()}
                 </span>
                 <span className="text-sm font-bold capitalize">
-                  {x.stage.replaceAll('_', ' ')}
+                  {x.stage.replace(/_/g, ' ')}
                 </span>
                 {x.severity && <SeverityBadge value={x.severity} />}
                 {x.mitre_id && (

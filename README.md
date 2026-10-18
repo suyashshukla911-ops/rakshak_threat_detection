@@ -56,6 +56,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 cd ..
+copy .env.example .env   # DEMO_MODE=true is enabled by default in .env.example for live testing
 python scripts/generate_attack.py
 python scripts/train_anomaly.py
 uvicorn app.main:app --reload --app-dir backend --port 8000
@@ -151,5 +152,6 @@ FastAPI REST Endpoints & React/TypeScript SOC Dashboard
 
 - **Single Attack Chain**: Focuses on reconstructing the targeted five-stage SSH-to-exfiltration attack chain.
 - **Batch Processing**: Designed for batch log ingestion and demonstration, not real-time streaming sockets.
+- **Uploads Scoped Per File**: Uploads are correlated per-file/batch, so a brute force in one uploaded file and a login in a separate file will not cross-correlate.
 - **Thresholds**: Rule thresholds (e.g. 5 failures in 120s, 50 MB transfer) are calibrated for demonstration clarity rather than general production noise.
 - **Authentication**: No authentication or multi-tenant RBAC is included in this build.

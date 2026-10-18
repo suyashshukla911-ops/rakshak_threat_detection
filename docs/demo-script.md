@@ -15,6 +15,7 @@
 
 2:10 — Show AI report and evidence references.
 
-2:35 — Disable LLM configuration and show deterministic fallback.
+2:35 — Click "Test Validator (Canned Bad Answer)" (enabled via DEMO_MODE=true in .env) to demonstrate live hallucination interception and deterministic fallback.
 
 2:50 — Close: “Deterministic detection, AI explanation, human in control.”
+

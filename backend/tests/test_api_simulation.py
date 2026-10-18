@@ -5,6 +5,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from starlette.testclient import TestClient
 from app.main import app
+from app.core.config import settings
 
 def test_api_simulation_and_report_generation():
     client = TestClient(app)
@@ -56,9 +57,19 @@ def test_api_simulation_and_report_generation():
     assert "content" in rep
     assert len(rep["content"]["evidence_refs"]) > 0
 
-    # 5. Inject bad AI answer demo toggle verifies validation fallback
-    bad_res = client.post(f"/api/incidents/{inc['id']}/report?inject_bad=true")
-    assert bad_res.status_code == 200
-    bad_rep = bad_res.json()
-    assert bad_rep["status"] == "fallback"
-    assert "rejected_reason" in bad_rep
+    # 5. Inject bad AI answer demo toggle verification:
+    # A. When demo_mode is False, gate is closed -> 403 Forbidden
+    settings.demo_mode = False
+    forbidden_res = client.post(f"/api/incidents/{inc['id']}/report?inject_bad=true")
+    assert forbidden_res.status_code == 403
+
+    # B. When demo_mode is True, gate opens -> canned bad AI is rejected by validator -> status: fallback
+    try:
+        settings.demo_mode = True
+        bad_res = client.post(f"/api/incidents/{inc['id']}/report?inject_bad=true")
+        assert bad_res.status_code == 200
+        bad_rep = bad_res.json()
+        assert bad_rep["status"] == "fallback"
+        assert "rejected_reason" in bad_rep
+    finally:
+        settings.demo_mode = False

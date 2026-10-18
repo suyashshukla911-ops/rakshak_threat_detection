@@ -147,7 +147,7 @@ def test_timeline_chronological_ordering():
 
 
 def test_deduplication_preserves_distinct_lines_same_second():
-    # Two identical failed login events occurring at the exact same second on different lines
+    # Two identical failed login events occurring at the exact same second
     same_time = datetime(2026, 10, 18, 9, 41, 20, tzinfo=timezone.utc)
     ev1 = EventIn(
         timestamp=same_time,
@@ -170,13 +170,18 @@ def test_deduplication_preserves_distinct_lines_same_second():
         line_offset=102,
     )
 
-    norm1 = normalize_event(ev1, "batch-1")
-    norm2 = normalize_event(ev2, "batch-1")
+    # Distinct occurrences within the same second have different raw_hashes and ids
+    norm1 = normalize_event(ev1, "batch-1", occurrence=1)
+    norm2 = normalize_event(ev2, "batch-1", occurrence=2)
 
-    # Hashes must be different because line offsets differ
     assert norm1["raw_hash"] != norm2["raw_hash"]
     assert norm1["id"] != norm2["id"]
 
-    # Re-normalizing the identical line offset and source file yields exact same hash
-    norm1_repeat = normalize_event(ev1, "batch-1")
+    # Re-normalizing the identical occurrence yields exact same hash
+    norm1_repeat = normalize_event(ev1, "batch-1", occurrence=1)
     assert norm1["raw_hash"] == norm1_repeat["raw_hash"]
+
+    # Line offset change (e.g. rotated log) does NOT change hash (line_offset is excluded from hash)
+    ev1_rotated = ev1.model_copy(update={"line_offset": 500, "source_file": "auth.log.1"})
+    norm1_rotated = normalize_event(ev1_rotated, "batch-1", occurrence=1)
+    assert norm1["raw_hash"] == norm1_rotated["raw_hash"]
