@@ -176,6 +176,8 @@ def build_incidents(alerts: list, events_by_id: dict[str, dict]) -> list[dict]:
                 "description": desc,
                 "mitre_id": a.mitre_ids[0] if a.mitre_ids else "",
                 "link_reason": a.link_reason or "seed: same source_ip + host",
+                "severity": a.severity,
+                "anomaly_score": getattr(a, "anomaly_score", None),
             })
 
         timeline.sort(key=lambda x: x["ts"])

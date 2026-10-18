@@ -53,6 +53,8 @@ class TimelineStage(BaseModel):
     description: str
     mitre_id: str
     link_reason: str
+    severity: str | None = None
+    anomaly_score: float | None = None
 
 class AIOutput(BaseModel):
     executive_summary: str

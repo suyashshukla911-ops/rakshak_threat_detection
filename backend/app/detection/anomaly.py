@@ -26,8 +26,11 @@ class AnomalyEngine:
     def features(events: list[dict]) -> pd.DataFrame:
         buckets = defaultdict(list)
         for e in events:
+            ip = e.get("source_ip")
+            if not ip:
+                continue
             ts = pd.Timestamp(e["timestamp"]).floor("min")
-            buckets[(e.get("source_ip"), ts)].append(e)
+            buckets[(ip, ts)].append(e)
         rows = []
         for (source_ip, ts), vals in buckets.items():
             rows.append({

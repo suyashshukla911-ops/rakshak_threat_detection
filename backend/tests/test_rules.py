@@ -10,7 +10,10 @@ def test_attack_rules_and_decoys():
     records=json.loads((ROOT/"data/sample_logs/ssh_attack.json").read_text())
     # timestamps from JSON are strings; normalize only the field needed for the rule function
     from datetime import datetime
-    for r in records: r["timestamp"]=datetime.fromisoformat(r["timestamp"].replace("Z","+00:00")); r["id"]=str(id(r))
+    for idx, r in enumerate(records):
+        r["timestamp"] = datetime.fromisoformat(r["timestamp"].replace("Z", "+00:00"))
+        r["id"] = f"evt-{idx:05d}"
+
     alerts=detect_alerts(records)
     rules={a.rule_id for a in alerts}
     assert {"SSH_BRUTE_FORCE","LOGIN_AFTER_BRUTE_FORCE","PRIVILEGE_ESCALATION","SENSITIVE_DATA_ACCESS","EXFILTRATION"}.issubset(rules)

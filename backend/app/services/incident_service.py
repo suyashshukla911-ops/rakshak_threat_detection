@@ -20,6 +20,8 @@ from app.core.config import settings
 ROOT = settings.model_config.get("env_file") and pathlib.Path(settings.model_config['env_file']).parent or pathlib.Path(__file__).resolve().parents[3]
 FIXTURE = ROOT / "data/fixtures/enrichment_demo.json"
 
+_ANOMALY_COUNT_CACHE = 0
+
 class IncidentService:
     def __init__(self, db):
         self.db = db
@@ -28,7 +30,10 @@ class IncidentService:
 
     def clear_demo(self, clear_uploads: bool = False):
         """Resets the demo data while preserving any user-uploaded logs."""
+        global _ANOMALY_COUNT_CACHE
+        _ANOMALY_COUNT_CACHE = 0
         if clear_uploads:
+
             self.db.query(IncidentORM).delete()
             self.db.query(AlertORM).delete()
             self.db.query(EventORM).delete()
@@ -42,6 +47,8 @@ class IncidentService:
     def ingest_records(self, records: list[dict], batch_id: str, source_file: str | None = None) -> tuple[int, list[str]]:
         accepted = 0
         rejected = []
+        existing_hashes = set(self.db.scalars(select(EventORM.raw_hash)).all())
+        batch_to_add = []
         for idx, raw in enumerate(records, start=1):
             event, error = validate_event(raw)
             if error:
@@ -50,14 +57,22 @@ class IncidentService:
             sf = raw.get("source_file", source_file)
             lo = raw.get("line_offset", idx)
             payload = normalize_event(event, batch_id, source_file=sf, line_offset=lo)
-            if self.db.scalar(select(EventORM).where(EventORM.raw_hash == payload["raw_hash"])):
+            raw_hash = payload["raw_hash"]
+            if raw_hash in existing_hashes:
                 continue
+            existing_hashes.add(raw_hash)
             # Filter to known fields on EventORM
             orm_kwargs = {k: v for k, v in payload.items() if hasattr(EventORM, k)}
-            self.db.add(EventORM(**orm_kwargs))
+            batch_to_add.append(EventORM(**orm_kwargs))
             accepted += 1
+            if len(batch_to_add) >= 1000:
+                self.db.add_all(batch_to_add)
+                batch_to_add = []
+        if batch_to_add:
+            self.db.add_all(batch_to_add)
         self.db.commit()
         return accepted, rejected
+
 
     async def run_detection(self, progress_callback=None, is_simulation: bool = False, simulate_bad_ai: bool = False) -> tuple[list[AlertORM], list[IncidentORM], int]:
         events_orm = list(self.db.scalars(select(EventORM).order_by(EventORM.timestamp)).all())
@@ -180,6 +195,8 @@ class IncidentService:
             }
 
         self.db.commit()
+        global _ANOMALY_COUNT_CACHE
+        _ANOMALY_COUNT_CACHE = anomaly_count
         return alerts_orm, incident_orms, anomaly_count
 
     def run_detection_sync(self, progress_callback=None, is_simulation: bool = False, simulate_bad_ai: bool = False) -> tuple[list[AlertORM], list[IncidentORM], int]:
@@ -199,7 +216,20 @@ class IncidentService:
 
     def get_incident(self, incident_id: str) -> dict | None:
         obj = self.db.get(IncidentORM, incident_id)
-        return self.incident_to_dict(obj) if obj else None
+        if not obj:
+            return None
+        data = self.incident_to_dict(obj)
+        all_event_ids = set()
+        for t in data.get("timeline", []):
+            all_event_ids.update(t.get("event_ids", []))
+        if all_event_ids:
+            events = self.db.scalars(select(EventORM).where(EventORM.id.in_(list(all_event_ids)))).all()
+            # Sort events by timestamp
+            events_sorted = sorted(events, key=lambda e: e.timestamp)
+            data["events"] = [self.orm_event_to_dict(e) for e in events_sorted]
+        else:
+            data["events"] = []
+        return data
 
     def get_alerts(self) -> list[dict]:
         return [self.alert_to_dict(x) for x in self.db.scalars(select(AlertORM).order_by(AlertORM.first_seen.desc())).all()]
@@ -221,14 +251,9 @@ class IncidentService:
             volumes = [{"ts": k, "count": v} for k, v in sorted(by_day.items())[-30:]]
 
         # Count anomalous 1-minute feature windows
-        anomaly_count = 0
-        if self.anomaly.status == "ready" and events:
-            try:
-                events_dict = [self.orm_event_to_dict(e) for e in events]
-                scores = self.anomaly.score(events_dict)
-                anomaly_count = sum(1 for v in scores.values() if v >= 0.70)
-            except Exception:
-                anomaly_count = 0
+        global _ANOMALY_COUNT_CACHE
+        anomaly_count = _ANOMALY_COUNT_CACHE
+
 
         return {
             "critical_incidents": sum(i.severity == "critical" for i in incidents),

@@ -1,6 +1,7 @@
 # Three-minute demo
 
-0:00 — “An analyst sees thousands of events. Which one is the attack?”
+0:00 — “An analyst sees ~14,000 events. Which of these is an attack?”
+
 
 0:20 — Run Attack Simulation and narrate the real stages.
 

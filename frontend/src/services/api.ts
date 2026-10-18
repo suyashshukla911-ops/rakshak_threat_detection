@@ -5,5 +5,5 @@ async function req<T>(path:string, opts?:RequestInit):Promise<T>{
 }
 export const api={
   health:()=>req<any>('/health'), stats:()=>req<any>('/stats'), incidents:()=>req<any[]>('/incidents'), incident:(id:string)=>req<any>(`/incidents/${id}`), alerts:()=>req<any[]>('/alerts'), alert:(id:string)=>req<any>(`/alerts/${id}`),
-  run:()=>req<{run_id:string}>('/simulation/run',{method:'POST'}), status:(id:string)=>req<any>(`/simulation/${id}/status`), reset:()=>req<any>('/simulation/reset',{method:'POST'}), report:(id:string)=>req<any>(`/incidents/${id}/report`,{method:'POST'}), upload:(file:File)=>{const f=new FormData();f.append('file',file);return req<any>('/logs/upload',{method:'POST',body:f})}
+  run:()=>req<{run_id:string}>('/simulation/run',{method:'POST'}), status:(id:string)=>req<any>(`/simulation/${id}/status`), reset:()=>req<any>('/simulation/reset',{method:'POST'}), report:(id:string, injectBad?:boolean)=>req<any>(`/incidents/${id}/report${injectBad ? '?inject_bad=true' : ''}`,{method:'POST'}), upload:(file:File)=>{const f=new FormData();f.append('file',file);return req<any>('/logs/upload',{method:'POST',body:f})}
 };

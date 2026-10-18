@@ -17,7 +17,8 @@ def reset():
     db = SessionLocal()
     try:
         from app.services.incident_service import IncidentService
-        IncidentService(db).clear_demo()
+        IncidentService(db).clear_demo(clear_uploads=False)
         return {"ok": True}
+
     finally:
         db.close()
