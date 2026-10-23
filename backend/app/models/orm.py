@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import JSON, Integer, String, DateTime, Text, Float
+from sqlalchemy import JSON, Integer, String, DateTime, Text, Float, Index
 
 class Base(DeclarativeBase):
     pass
@@ -25,6 +25,11 @@ class EventORM(Base):
     source_file: Mapped[str | None] = mapped_column(String, nullable=True)
     line_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    __table_args__ = (
+        Index("ix_events_source_host_type", "source_ip", "host", "event_type"),
+        Index("ix_events_batch_timestamp", "batch_id", "timestamp"),
+    )
+
 
 class AlertORM(Base):
     __tablename__ = "alerts"
@@ -41,6 +46,10 @@ class AlertORM(Base):
     anomaly_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     link_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     batch_id: Mapped[str] = mapped_column(String, default="demo", index=True)
+
+    __table_args__ = (
+        Index("ix_alerts_batch_rule", "batch_id", "rule_id"),
+    )
 
 class IncidentORM(Base):
     __tablename__ = "incidents"

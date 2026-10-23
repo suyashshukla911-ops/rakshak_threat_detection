@@ -6,9 +6,11 @@ import numpy as np
 import pandas as pd
 from app.core.config import settings
 
+
 class AnomalyEngine:
     def __init__(self):
         self.model = None
+        self.train_raw: np.ndarray | None = None
         self.status = "unavailable"
         self._load()
 
@@ -16,10 +18,17 @@ class AnomalyEngine:
         path = Path(settings.anomaly_model_path)
         try:
             if path.exists():
-                self.model = joblib.load(path)
+                loaded = joblib.load(path)
+                if isinstance(loaded, dict) and "model" in loaded:
+                    self.model = loaded["model"]
+                    self.train_raw = loaded.get("train_raw")
+                else:
+                    self.model = loaded
+                    self.train_raw = None
                 self.status = "ready"
         except Exception:
             self.model = None
+            self.train_raw = None
             self.status = "unavailable"
 
     @staticmethod
@@ -52,12 +61,23 @@ class AnomalyEngine:
             return {}
         x = df[["event_count", "failed_login_count", "distinct_users_attempted", "distinct_hosts_touched", "bytes_out"]]
         raw = -self.model.decision_function(x)
-        min_v, max_v = float(raw.min()), float(raw.max())
-        if max_v - min_v < 1e-9:
-            normalized = np.full(len(raw), 0.5)
+
+        if self.train_raw is not None and len(self.train_raw) > 0:
+            # Calibrated ECDF percentile against baseline training distribution (0..1)
+            normalized = np.searchsorted(self.train_raw, raw, side="right") / len(self.train_raw)
         else:
-            normalized = (raw - min_v) / (max_v - min_v)
+            min_v, max_v = float(raw.min()), float(raw.max())
+            if max_v - min_v < 1e-9:
+                normalized = np.full(len(raw), 0.5)
+            else:
+                normalized = (raw - min_v) / (max_v - min_v)
+
         out = {}
         for (_, row), score in zip(df.iterrows(), normalized):
             out[f"{row['source_ip']}|{row['window']}"] = round(float(score), 4)
         return out
+
+
+# Module-level singleton to avoid reloading from disk on every request
+anomaly_engine = AnomalyEngine()
+

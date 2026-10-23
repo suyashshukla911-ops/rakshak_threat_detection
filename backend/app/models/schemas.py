@@ -57,12 +57,12 @@ class TimelineStage(BaseModel):
     anomaly_score: float | None = None
 
 class AIOutput(BaseModel):
-    executive_summary: str
-    attack_narrative: str
-    why_detected: list[str]
-    potential_impact: str
-    investigation_steps: list[str]
-    evidence_refs: list[str]
+    executive_summary: str = Field(..., max_length=1000)
+    attack_narrative: str = Field(..., max_length=4000)
+    why_detected: list[str] = Field(..., max_length=20)
+    potential_impact: str = Field(..., max_length=2000)
+    investigation_steps: list[str] = Field(..., max_length=20)
+    evidence_refs: list[str] = Field(..., max_length=100)
 
 class IncidentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)

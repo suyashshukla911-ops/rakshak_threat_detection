@@ -11,9 +11,9 @@ class Settings(BaseSettings):
     anomaly_model_path: str = str(ROOT / "data/models/isolation_forest.joblib")
     abuseipdb_api_key: str | None = None
     llm_api_key: str | None = None
-    llm_base_url: str = "https://api.openai.com/v1"
-    llm_model: str | None = None
-    llm_timeout_seconds: float = 20.0
+    llm_base_url: str = "http://localhost:11434/v1"
+    llm_model: str | None = "qwen2.5:3b"
+    llm_timeout_seconds: float = 90.0
     demo_mode: bool = False
 
     model_config = SettingsConfigDict(env_file=ROOT / ".env", extra="ignore", case_sensitive=False)

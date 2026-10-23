@@ -277,14 +277,18 @@ export default function IncidentPage() {
                 <div className="text-xs text-slate-500">Confidence</div>
                 <div className="mt-1 text-slate-200">
                   {incident.enrichment?.confidence !== undefined && incident.enrichment?.confidence !== null
-                    ? `${Math.round(incident.enrichment.confidence * 100)}%`
+                    ? `${Math.round(incident.enrichment.confidence <= 1 ? incident.enrichment.confidence * 100 : incident.enrichment.confidence)}%`
                     : '—'}
                 </div>
               </div>
               <div>
                 <div className="text-xs text-slate-500">Report count</div>
                 <div className="mono mt-1 font-semibold text-rose-400">
-                  {incident.enrichment?.report_count ?? incident.enrichment?.reports ?? '142'} reports
+                  {incident.enrichment?.report_count !== undefined && incident.enrichment?.report_count !== null
+                    ? `${incident.enrichment.report_count} reports`
+                    : (incident.enrichment?.reports !== undefined && incident.enrichment?.reports !== null
+                        ? `${incident.enrichment.reports} reports`
+                        : '0 reports')}
                 </div>
               </div>
               <div className="col-span-2 pt-2 border-t border-slate-800">

@@ -10,7 +10,7 @@ from app.ingest.normalizer import normalize_event, get_semantic_key
 from app.ingest.validation import validate_event
 from app.ingest.parsers import parse_content
 from app.detection.rules import detect_alerts
-from app.detection.anomaly import AnomalyEngine
+from app.detection.anomaly import AnomalyEngine, anomaly_engine
 from app.correlation.correlator import build_incidents
 from app.ai.explainer import ai_explainer
 from app.enrichment.demo_mock import DemoMockProvider
@@ -25,7 +25,7 @@ _ANOMALY_COUNT_CACHE = 0
 class IncidentService:
     def __init__(self, db):
         self.db = db
-        self.anomaly = AnomalyEngine()
+        self.anomaly = anomaly_engine
         self.explainer = ai_explainer
 
     def clear_demo(self, clear_uploads: bool = False):
@@ -208,7 +208,10 @@ class IncidentService:
         for incorm in incident_orms:
             notify("Generating report", f"{incorm.id}")
             incdict = self.incident_to_dict(incorm)
-            incorm.enrichment = provider.lookup(incorm.source_ip)
+            if hasattr(provider, "lookup_async") and callable(getattr(provider, "lookup_async", None)):
+                incorm.enrichment = await provider.lookup_async(incorm.source_ip)
+            else:
+                incorm.enrichment = provider.lookup(incorm.source_ip)
             status, report, metadata = await self.explainer.generate(incdict, simulate_bad_ai=simulate_bad_ai)
             incorm.ai_summary = {
                 "status": status,
@@ -261,31 +264,47 @@ class IncidentService:
         return [self.incident_to_dict(x) for x in self.db.scalars(select(IncidentORM).order_by(IncidentORM.id)).all()]
 
     def stats(self) -> dict:
-        events = list(self.db.scalars(select(EventORM)).all())
-        alerts = list(self.db.scalars(select(AlertORM)).all())
-        incidents = list(self.db.scalars(select(IncidentORM)).all())
-        top_ip = Counter([a.explanation.get("entities", {}).get("source_ip") for a in alerts if a.explanation.get("entities", {}).get("source_ip")]).most_common(1)
-        targeted_users = [e.user for e in events if e.user and e.event_type in {"ssh_failed_login", "ssh_success_login"}]
-        top_user = Counter(targeted_users).most_common(1)
-        top_rule = Counter([a.rule_id for a in alerts]).most_common(1)
-        volumes = []
-        if events:
-            by_day = Counter([e.timestamp.strftime("%Y-%m-%dT%H:%M") for e in events])
-            volumes = [{"ts": k, "count": v} for k, v in sorted(by_day.items())[-30:]]
+        events_count = self.db.scalar(select(func.count(EventORM.id))) or 0
+        critical_incidents = self.db.scalar(select(func.count(IncidentORM.id)).where(IncidentORM.severity == "critical")) or 0
+        high_alerts = self.db.scalar(select(func.count(AlertORM.id)).where(AlertORM.severity == "high")) or 0
 
-        # Count anomalous 1-minute feature windows
+        alerts = list(self.db.scalars(select(AlertORM)).all())
+        top_ip_counts = Counter([
+            a.explanation.get("entities", {}).get("source_ip")
+            for a in alerts
+            if isinstance(a.explanation, dict) and a.explanation.get("entities", {}).get("source_ip")
+        ])
+        top_ip = top_ip_counts.most_common(1)
+        top_rule = Counter([a.rule_id for a in alerts]).most_common(1)
+
+        top_user_row = self.db.execute(
+            select(EventORM.user, func.count(EventORM.id))
+            .where(EventORM.user.isnot(None), EventORM.event_type.in_(["ssh_failed_login", "ssh_success_login"]))
+            .group_by(EventORM.user)
+            .order_by(func.count(EventORM.id).desc())
+            .limit(1)
+        ).first()
+        top_user = top_user_row[0] if top_user_row else None
+
+        volumes_rows = self.db.execute(
+            select(
+                func.strftime("%Y-%m-%dT%H:%M", EventORM.timestamp).label("ts_min"),
+                func.count(EventORM.id),
+            ).group_by("ts_min").order_by("ts_min").limit(30)
+        ).all()
+        volumes = [{"ts": row[0], "count": row[1]} for row in volumes_rows]
+
         global _ANOMALY_COUNT_CACHE
         anomaly_count = _ANOMALY_COUNT_CACHE
 
-
         return {
-            "critical_incidents": sum(i.severity == "critical" for i in incidents),
-            "high_alerts": sum(a.severity == "high" for a in alerts),
-            "events_processed": len(events),
+            "critical_incidents": critical_incidents,
+            "high_alerts": high_alerts,
+            "events_processed": events_count,
             "anomalies": anomaly_count,
             "top_attacker_ip": top_ip[0][0] if top_ip else None,
-            "most_targeted_user": top_user[0][0] if top_user else None,
+            "most_targeted_user": top_user,
             "most_common_detection": top_rule[0][0] if top_rule else None,
-            "event_volume": volumes
+            "event_volume": volumes,
         }
 
